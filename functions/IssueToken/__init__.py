@@ -19,7 +19,7 @@ except ImportError:  # allow tests without azure-functions runtime
         def __init__(self, body: str, status_code: int, mimetype: str):
             self._body = body; self.status_code = status_code; self.mimetype = mimetype
     class func:  # type: ignore
-        HttpRequest = DummyReq  # noqa: N815 (keep azure style names for compatibility)
+        HttpRequest = DummyReq  # noqa: N815 (match azure.functions naming)
         HttpResponse = DummyResp  # noqa: N815
 
 MIN_TTL = 5
@@ -51,6 +51,11 @@ def validate_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         raise ValidationError("ticketId must be non-empty string")
     if not isinstance(device_id, str) or not device_id:
         raise ValidationError("deviceId must be non-empty string")
+    # '|' は署名メッセージの区切り文字として利用しているため混入を禁止
+    if isinstance(ticket_id, str) and '|' in ticket_id:
+        raise ValidationError("ticketId must not contain '|'")
+    if isinstance(device_id, str) and '|' in device_id:
+        raise ValidationError("deviceId must not contain '|'")
     if ttl is not None and (not isinstance(ttl, int) or ttl <= 0 or ttl > 600):  # raw ttl sanity upper hard cap
         raise ValidationError("ttl must be int 1..600 if provided")
     return {"ticketId": ticket_id, "deviceId": device_id, "ttl": ttl}
@@ -64,7 +69,7 @@ def main(req: 'func.HttpRequest') -> 'func.HttpResponse':  # type: ignore
     try:
         payload = req.get_json()
     except Exception:
-        return func.HttpResponse(json.dumps({"error": "Invalid JSON"}), status_code=400, mimetype=MIMETYPE_JSON)
+            return func.HttpResponse(json.dumps({"error": "Invalid JSON"}), status_code=400, mimetype=MIMETYPE_JSON)
 
     try:
         data = validate_payload(payload)
