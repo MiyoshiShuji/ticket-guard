@@ -172,3 +172,25 @@ def test_error_missing_signing_secret(monkeypatch):
     body = parse_body(resp)
     assert resp.status_code == 500
     assert body["error"] == "Server misconfiguration"
+
+
+def test_error_ticket_id_contains_pipe(monkeypatch):
+    # 目的: ticketId に '|' が含まれる場合バリデーションエラーとなることを確認
+    # 期待値: status_code == 400, メッセージに 'ticketId' と '|' が含まれる
+    monkeypatch.setenv("SIGNING_SECRET", "secret")
+    req = DummyReq({"ticketId": "ev|ent", "deviceId": "d1"})
+    resp = issue.main(req)
+    body = parse_body(resp)
+    assert resp.status_code == 400
+    assert "ticketId" in body["error"] and "|" in body["error"]
+
+
+def test_error_device_id_contains_pipe(monkeypatch):
+    # 目的: deviceId に '|' が含まれる場合バリデーションエラーとなることを確認
+    # 期待値: status_code == 400, メッセージに 'deviceId' と '|' が含まれる
+    monkeypatch.setenv("SIGNING_SECRET", "secret")
+    req = DummyReq({"ticketId": "t1", "deviceId": "dev|01"})
+    resp = issue.main(req)
+    body = parse_body(resp)
+    assert resp.status_code == 400
+    assert "deviceId" in body["error"] and "|" in body["error"]

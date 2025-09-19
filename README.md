@@ -30,6 +30,8 @@ Response JSON:
 ```
 message = f"{ticketId}|{deviceId}|{startAtEpochSec}|{ttlSec}|{nonce}".encode()
 sig = base64url( HMAC_SHA256( SIGNING_SECRET, message ) )
+
+禁止文字: `ticketId` / `deviceId` に区切り文字 `|` は使用禁止 (署名メッセージ分解曖昧化防止)
 ```
 
 ### Environment Variable
@@ -53,4 +55,18 @@ pytest -q
 - TTL less than 5 -> 5; greater than 30 -> 30; absent -> 8.
 - Nonce is 12 random bytes base64url (no padding).
 - Structured log events: `validation_failed`, `missing_signing_secret`, `token_issued`.
+
+### Verification Example (Python)
+```python
+import hmac, hashlib, base64
+
+def b64url(data: bytes) -> str:
+	return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+def verify(secret: str, ticket_id: str, device_id: str, start_at: int, ttl: int, nonce: str, sig: str) -> bool:
+	msg = f"{ticket_id}|{device_id}|{start_at}|{ttl}|{nonce}".encode()
+	expected = b64url(hmac.new(secret.encode(), msg, hashlib.sha256).digest())
+	# 固定時間比較を推奨 (hmac.compare_digest)
+	return hmac.compare_digest(expected, sig)
+```
 
