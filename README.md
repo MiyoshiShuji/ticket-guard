@@ -1,6 +1,7 @@
 # ticket-guard
 
 [![CI](https://github.com/MiyoshiShuji/ticket-guard/workflows/ci/badge.svg)](https://github.com/MiyoshiShuji/ticket-guard/actions/workflows/ci.yml)
+[![Deploy](https://github.com/MiyoshiShuji/ticket-guard/workflows/Deploy%20to%20Azure/badge.svg)](https://github.com/MiyoshiShuji/ticket-guard/actions/workflows/deploy.yml)
 
 ## /api/issue-token (Azure Function)
 
@@ -71,4 +72,74 @@ def verify(secret: str, ticket_id: str, device_id: str, start_at: int, ttl: int,
 	# 固定時間比較を推奨 (hmac.compare_digest)
 	return hmac.compare_digest(expected, sig)
 ```
+
+## Azure Deployment
+
+### Prerequisites
+
+1. **Azure Resources**:
+   - Azure subscription
+   - Resource group for the deployment
+   
+2. **GitHub OIDC Setup**:
+   - Service Principal with federated credential for GitHub Actions
+   - Contributor access to the target resource group
+
+3. **Repository Secrets** (configured in GitHub repo settings):
+   - `AZURE_CLIENT_ID` - Service Principal client ID
+   - `AZURE_TENANT_ID` - Azure tenant ID
+   - `AZURE_SUBSCRIPTION_ID` - Azure subscription ID
+   - `AZURE_RESOURCE_GROUP` - Target resource group name
+   - `APP_BASENAME` - Base name for resources (e.g., "ticket-guard")
+   - `SIGNING_SECRET` - Strong random secret for HMAC signing
+
+### Setup Guide
+
+1. **Create Azure Service Principal with OIDC**:
+```bash
+# Create service principal
+az ad sp create-for-rbac --name "github-actions-ticket-guard" \
+  --role contributor \
+  --scopes /subscriptions/{subscription-id}/resourceGroups/{resource-group-name}
+
+# Note the output: appId (client ID), tenant
+```
+
+2. **Create Federated Credential**:
+```bash
+az ad app federated-credential create \
+  --id {client-id} \
+  --parameters '{
+    "name": "github-actions-main",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "subject": "repo:MiyoshiShuji/ticket-guard:ref:refs/heads/main",
+    "description": "GitHub Actions OIDC for main branch",
+    "audiences": ["api://AzureADTokenExchange"]
+  }'
+```
+
+3. **Configure Repository Secrets** in GitHub Settings > Secrets and variables > Actions
+
+4. **Deploy**:
+   - Push to `main` branch to trigger automatic deployment
+   - Or manually trigger via Actions tab > Deploy to Azure > Run workflow
+
+### Infrastructure
+
+The deployment creates:
+- **Storage Account** - Azure Functions runtime storage
+- **Application Insights** - Monitoring and logging
+- **App Service Plan** - Consumption (serverless) plan
+- **Function App** - Python 3.11 runtime with security settings
+
+See `infra/README.md` for detailed infrastructure documentation.
+
+### Function Endpoint
+
+After deployment, the function will be available at:
+```
+POST https://{app-name}.azurewebsites.net/api/issue-token?code={function-key}
+```
+
+The function key is captured during deployment and displayed in the workflow logs.
 
