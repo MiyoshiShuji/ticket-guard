@@ -5,7 +5,8 @@ description = "Azure Functions for Ticket Guard"
 authors = ["Shuji Miyoshi <shuji.miyoshi@example.com>"]
 
 [tool.poetry.dependencies]
-python = "^3.13"
+# Azure Functions ランタイム (現行: 3.11) とローカル開発 (3.11 〜 3.13) を両立させるため幅を持たせる
+python = ">=3.11,<3.14"
 azure-functions = "1.18.0"
 
 [tool.poetry.dev-dependencies]
