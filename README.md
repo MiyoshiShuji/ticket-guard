@@ -1,5 +1,7 @@
 # ticket-guard
 
+[![CI](https://github.com/MiyoshiShuji/ticket-guard/workflows/ci/badge.svg)](https://github.com/MiyoshiShuji/ticket-guard/actions/workflows/ci.yml)
+
 ## /api/issue-token (Azure Function)
 
 HTTP POST `https://<your-function-app>.azurewebsites.net/api/issue-token?code=<function_key>`
