@@ -23,8 +23,8 @@ concurrency:
 
 env:
   LOCATION: japaneast
+  RG_ONLY_TEMPLATE: infra/rg-only.bicep
   PARAMETERS_FILE: infra/parameters.poc.json
-  SUBSCRIPTION_TEMPLATE: infra/deploy.subscription.bicep
 
 jobs:
   what-if:
@@ -44,19 +44,21 @@ jobs:
       - name: Azure CLI Version
         run: az version
 
-      - name: What-if
+      - name: What-if (RG only)
         run: |
           set -eux
           az deployment sub what-if \
             --name plan-${{ github.run_id }} \
             --location $LOCATION \
-            --template-file $SUBSCRIPTION_TEMPLATE \
-            --parameters @$PARAMETERS_FILE signingSecret=${{ secrets.SIGNING_SECRET }}
+            --template-file $RG_ONLY_TEMPLATE \
+            --parameters @$PARAMETERS_FILE \
+            --parameters resourceGroupName=$(jq -r '.parameters.resourceGroupName.value' $PARAMETERS_FILE) location=$(jq -r '.parameters.location.value' $PARAMETERS_FILE)
 
       - name: Summary
         if: always()
         run: |
           echo "### Infra What-if Result" >> $GITHUB_STEP_SUMMARY
-          echo "Template: $SUBSCRIPTION_TEMPLATE" >> $GITHUB_STEP_SUMMARY
-          echo "Parameters: $PARAMETERS_FILE" >> $GITHUB_STEP_SUMMARY
+          echo "Template: $RG_ONLY_TEMPLATE" >> $GITHUB_STEP_SUMMARY
+          echo "Mode: Resource Group creation only (Function/App resources deferred)" >> $GITHUB_STEP_SUMMARY
+          echo "Parameters file: $PARAMETERS_FILE" >> $GITHUB_STEP_SUMMARY
 

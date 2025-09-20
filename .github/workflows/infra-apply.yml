@@ -23,8 +23,8 @@ concurrency:
 
 env:
   LOCATION: japaneast
+  RG_ONLY_TEMPLATE: infra/rg-only.bicep
   PARAMETERS_FILE: infra/parameters.poc.json
-  SUBSCRIPTION_TEMPLATE: infra/deploy.subscription.bicep
 
 jobs:
   deploy:
@@ -41,33 +41,22 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Create / Update (subscription deployment)
+      - name: Create / Update RG only (subscription deployment)
         id: deploy
         run: |
           set -eux
           az deployment sub create \
             --name apply-${{ github.run_id }} \
             --location $LOCATION \
-            --template-file $SUBSCRIPTION_TEMPLATE \
-            --parameters @$PARAMETERS_FILE signingSecret=${{ secrets.SIGNING_SECRET }} | tee deploy-output.json
-
-      - name: Extract Outputs
-        id: outputs
-        run: |
-          FUNC_NAME=$(jq -r '.properties.outputs.functionAppName.value // empty' deploy-output.json)
-          PRINCIPAL_ID=$(jq -r '.properties.outputs.functionPrincipalId.value // empty' deploy-output.json)
-          TENANT_ID=$(jq -r '.properties.outputs.tenantId.value // empty' deploy-output.json)
-          echo "func_name=$FUNC_NAME" >> $GITHUB_OUTPUT
-          echo "principal_id=$PRINCIPAL_ID" >> $GITHUB_OUTPUT
-          echo "tenant_id=$TENANT_ID" >> $GITHUB_OUTPUT
+            --template-file $RG_ONLY_TEMPLATE \
+            --parameters @$PARAMETERS_FILE \
+            --parameters resourceGroupName=$(jq -r '.parameters.resourceGroupName.value' $PARAMETERS_FILE) location=$(jq -r '.parameters.location.value' $PARAMETERS_FILE) | tee deploy-output.json
 
       - name: Summarize
         run: |
           echo "### Infra Apply Complete" >> $GITHUB_STEP_SUMMARY
           echo "Deployment Name: apply-${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
-          echo "Function App: ${{ steps.outputs.outputs.func_name }}" >> $GITHUB_STEP_SUMMARY || true
-          echo "PrincipalId: ${{ steps.outputs.outputs.principal_id }}" >> $GITHUB_STEP_SUMMARY || true
-          echo "TenantId: ${{ steps.outputs.outputs.tenant_id }}" >> $GITHUB_STEP_SUMMARY || true
+          echo "Mode: Resource Group only (no Function / Storage / Insights in this phase)" >> $GITHUB_STEP_SUMMARY
           echo "Run Ref (plan): ${{ github.event.inputs.runIdRef }}" >> $GITHUB_STEP_SUMMARY
-          echo "Next: Add Key Vault module (skeleton) then migrate SIGNING_SECRET." >> $GITHUB_STEP_SUMMARY
+          echo "Next: Introduce full infra via deploy.subscription.bicep in a later branch." >> $GITHUB_STEP_SUMMARY
 

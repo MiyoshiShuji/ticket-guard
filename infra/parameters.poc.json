@@ -24,7 +24,7 @@
       "value": "poc"
     },
     "signingSecret": {
-      "value": "REPLACE-ME-WITH-STRONG-RANDOM-VALUE" 
+      "value": "REPLACE-IN-PHASE1" 
     }
   }
 }
