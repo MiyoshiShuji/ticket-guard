@@ -1,0 +1,62 @@
+name: Infra Plan (What-if)
+
+on:
+  pull_request:
+    paths:
+      - 'infra/**.bicep'
+      - 'infra/**.json'
+      - '.github/workflows/infra-plan.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'infra/**.bicep'
+      - 'infra/**.json'
+      - '.github/workflows/infra-plan.yml'
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: infra-plan-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  LOCATION: japaneast
+  PARAMETERS_FILE: infra/parameters.poc.json
+  SUBSCRIPTION_TEMPLATE: infra/deploy.subscription.bicep
+
+jobs:
+  what-if:
+    name: What-if (subscription scope)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Azure CLI Version
+        run: az version
+
+      - name: What-if
+        run: |
+          set -eux
+          az deployment sub what-if \
+            --name plan-${{ github.run_id }} \
+            --location $LOCATION \
+            --template-file $SUBSCRIPTION_TEMPLATE \
+            --parameters @$PARAMETERS_FILE signingSecret=${{ secrets.SIGNING_SECRET }}
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Infra What-if Result" >> $GITHUB_STEP_SUMMARY
+          echo "Template: $SUBSCRIPTION_TEMPLATE" >> $GITHUB_STEP_SUMMARY
+          echo "Parameters: $PARAMETERS_FILE" >> $GITHUB_STEP_SUMMARY
+

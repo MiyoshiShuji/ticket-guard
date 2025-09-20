@@ -1,0 +1,73 @@
+name: Infra Apply (Deploy)
+
+on:
+  workflow_dispatch:
+    inputs:
+      runIdRef:
+        description: 'Reference plan run id (optional for trace)'
+        required: false
+      confirm:
+        description: 'Type APPLY to confirm deployment'
+        required: true
+        default: 'APPLY'
+
+permissions:
+  id-token: write
+  contents: read
+
+environment: poc
+
+concurrency:
+  group: infra-apply
+  cancel-in-progress: false
+
+env:
+  LOCATION: japaneast
+  PARAMETERS_FILE: infra/parameters.poc.json
+  SUBSCRIPTION_TEMPLATE: infra/deploy.subscription.bicep
+
+jobs:
+  deploy:
+    if: github.event.inputs.confirm == 'APPLY'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create / Update (subscription deployment)
+        id: deploy
+        run: |
+          set -eux
+          az deployment sub create \
+            --name apply-${{ github.run_id }} \
+            --location $LOCATION \
+            --template-file $SUBSCRIPTION_TEMPLATE \
+            --parameters @$PARAMETERS_FILE signingSecret=${{ secrets.SIGNING_SECRET }} | tee deploy-output.json
+
+      - name: Extract Outputs
+        id: outputs
+        run: |
+          FUNC_NAME=$(jq -r '.properties.outputs.functionAppName.value // empty' deploy-output.json)
+          PRINCIPAL_ID=$(jq -r '.properties.outputs.functionPrincipalId.value // empty' deploy-output.json)
+          TENANT_ID=$(jq -r '.properties.outputs.tenantId.value // empty' deploy-output.json)
+          echo "func_name=$FUNC_NAME" >> $GITHUB_OUTPUT
+          echo "principal_id=$PRINCIPAL_ID" >> $GITHUB_OUTPUT
+          echo "tenant_id=$TENANT_ID" >> $GITHUB_OUTPUT
+
+      - name: Summarize
+        run: |
+          echo "### Infra Apply Complete" >> $GITHUB_STEP_SUMMARY
+          echo "Deployment Name: apply-${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "Function App: ${{ steps.outputs.outputs.func_name }}" >> $GITHUB_STEP_SUMMARY || true
+          echo "PrincipalId: ${{ steps.outputs.outputs.principal_id }}" >> $GITHUB_STEP_SUMMARY || true
+          echo "TenantId: ${{ steps.outputs.outputs.tenant_id }}" >> $GITHUB_STEP_SUMMARY || true
+          echo "Run Ref (plan): ${{ github.event.inputs.runIdRef }}" >> $GITHUB_STEP_SUMMARY
+          echo "Next: Add Key Vault module (skeleton) then migrate SIGNING_SECRET." >> $GITHUB_STEP_SUMMARY
+
