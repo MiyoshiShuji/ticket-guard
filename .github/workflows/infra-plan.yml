@@ -73,4 +73,5 @@ jobs:
           echo "Template: $RG_ONLY_TEMPLATE" >> $GITHUB_STEP_SUMMARY
           echo "Mode: Resource Group creation only (Function/App resources deferred)" >> $GITHUB_STEP_SUMMARY
           echo "Parameters file: $PARAMETERS_FILE (Bicep params)" >> $GITHUB_STEP_SUMMARY
+          echo "To test prod: set PARAMETERS_FILE=infra/prod.bicepparam via workflow_dispatch (future enhancement)" >> $GITHUB_STEP_SUMMARY
 

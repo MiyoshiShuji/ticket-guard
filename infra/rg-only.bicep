@@ -12,8 +12,8 @@ param resourceGroupName string
 @description('Azure region for the resource group.')
 param location string = 'japaneast'
 
-@description('Environment tag (fixed to poc for this phase).')
-@allowed(['poc'])
+@description('Environment name. PoC phase supports poc and prod (prod has no automatic expiry).')
+@allowed(['poc', 'prod'])
 param environment string = 'poc'
 
 @description('Owner contact (email or alias).')

@@ -70,4 +70,5 @@ jobs:
           echo "Mode: Resource Group only (no Function / Storage / Insights in this phase)" >> $GITHUB_STEP_SUMMARY
           echo "Run Ref (plan): ${{ github.event.inputs.runIdRef }}" >> $GITHUB_STEP_SUMMARY
           echo "Next: Introduce full infra via deploy.subscription.bicep in a later branch." >> $GITHUB_STEP_SUMMARY
+          echo "Prod params available: infra/prod.bicepparam (adjust PARAMETERS_FILE env before apply when enabling multi-env)" >> $GITHUB_STEP_SUMMARY
 
