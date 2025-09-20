@@ -12,10 +12,20 @@ ios-demo/**/*.xcuserstate
 DerivedData/
 
 ### Python
+functions/.venv/
+functions/__pycache__/
+functions/**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+
+### Misc
+*.swp
+*.tmp
 
 ### Misc
 *.swp
