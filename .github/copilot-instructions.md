@@ -264,12 +264,13 @@ sig = base64url(HMAC_SHA256(SIGNING_SECRET, message))
 - Server configuration errors return 500
 
 ## Build Times and Timeouts
-- Virtual environment creation: 3 seconds - Set timeout to 30+ seconds
-- Dependency installation: 5-15 seconds depending on network - Set timeout to 60+ seconds  
-- Test execution: <1 second (18 tests) - Set timeout to 30+ seconds
-- Type checking: 4 seconds - Set timeout to 30+ seconds
-- Manual testing: <1 second - Set timeout to 10+ seconds
+- Virtual environment creation: 3 seconds - Set timeout to 30+ seconds (10x buffer)
+- Dependency installation: 5-15 seconds depending on network - Set timeout to 150+ seconds (10x buffer)  
+- Test execution: <1 second (18 tests) - Set timeout to 10+ seconds (10x buffer)
+- Type checking: 4 seconds - Set timeout to 40+ seconds (10x buffer)
+- Manual testing: <1 second - Set timeout to 10+ seconds (10x buffer)
 
+**Note:** All timeouts use a standardized 10x safety buffer to account for unexpected delays (e.g., network issues).
 **CRITICAL**: Always use longer timeouts than needed. Network connectivity can cause delays.
 **NEVER CANCEL** any development commands - they are essential for validation.
 
