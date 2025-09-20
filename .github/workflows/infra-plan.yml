@@ -14,6 +14,9 @@ on:
       - 'infra/**.bicepparam'
       - 'infra/**.json'
       - '.github/workflows/infra-plan.yml'
+permissions:
+  id-token: write   # required for OIDC federated credentials
+  contents: read
 concurrency:
   group: infra-plan-${{ github.ref }}
   cancel-in-progress: false
@@ -30,6 +33,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate required secrets present
+        env:
+          HAS_CLIENT: ${{ secrets.AZURE_CLIENT_ID }}
+          HAS_TENANT: ${{ secrets.AZURE_TENANT_ID }}
+          HAS_SUB: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -e
+          test -n "$HAS_CLIENT" || { echo '::error title=Missing secret::AZURE_CLIENT_ID not configured'; exit 1; }
+          test -n "$HAS_TENANT" || { echo '::error title=Missing secret::AZURE_TENANT_ID not configured'; exit 1; }
+          test -n "$HAS_SUB" || { echo '::error title=Missing secret::AZURE_SUBSCRIPTION_ID not configured'; exit 1; }
+          echo "All required Azure federated credential secrets are present." 
 
       - name: Azure Login (OIDC)
         uses: azure/login@v2

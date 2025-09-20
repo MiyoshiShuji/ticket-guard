@@ -34,6 +34,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate required secrets present
+        env:
+          HAS_CLIENT: ${{ secrets.AZURE_CLIENT_ID }}
+          HAS_TENANT: ${{ secrets.AZURE_TENANT_ID }}
+          HAS_SUB: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -e
+          test -n "$HAS_CLIENT" || { echo '::error title=Missing secret::AZURE_CLIENT_ID not configured'; exit 1; }
+          test -n "$HAS_TENANT" || { echo '::error title=Missing secret::AZURE_TENANT_ID not configured'; exit 1; }
+          test -n "$HAS_SUB" || { echo '::error title=Missing secret::AZURE_SUBSCRIPTION_ID not configured'; exit 1; }
+          echo "All required Azure federated credential secrets are present."
+
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
