@@ -307,3 +307,89 @@ sig = base64url(HMAC_SHA256(SIGNING_SECRET, message))
 - CI/CD workflows exist (.github/workflows/) but are not for local development
 - flake8 linting reports style issues but doesn't prevent functionality
 - Function must be tested manually when Azure Functions Core Tools unavailable
+
+## Local Git Branch Cleanup Policy
+
+To keep the local repository lean, Copilot may proactively delete fully merged or obsolete local branches under the following safe rules. This allows automated housekeeping when you request cleanup (e.g., "ローカルの不要ブランチ消して").
+
+### Deletion Conditions (ALL must be true unless force-approved)
+1. Branch is not the primary branch (`main`).
+2. Branch upstream (e.g. `origin/feature-x`) no longer exists (seen as `[gone]`) OR the branch is fully merged into `main` (ancestor check).
+3. Branch contains no uncommitted work (clean working tree & index).
+4. Branch name does not start with protected prefixes: `wip/`, `experimental/`, `archive/`.
+
+### Additional Safety Logic
+- If a branch is *gone upstream* but NOT merged into `main`, Copilot will tag its head as `archive/<branch>` before deletion, unless you explicitly request a hard prune.
+- If both `feature-a` and `feature-b` point to the same commit and are redundant, the older (by creation date) is removed first if safe.
+- Detached HEAD states are never modified automatically.
+
+### Manual Override Phrases
+You can include these phrases in a request to adjust behavior:
+- "強制削除": Skip merge/upstream checks (still skips `main`).
+- "タグ付けしてから削除": Always create `archive/<branch>` tag before deletion.
+- "保護プリフィクス無視": Also delete branches with protected prefixes (must be combined with 強制削除).
+
+### Script Reference
+An optional helper script can be added at `scripts/cleanup-branches.sh` with logic mirroring the above. If absent, Copilot can recreate it. Sample implementation:
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+BASE=${1:-main}
+PROTECT_RE='^(main|wip/|experimental/|archive/)'
+git fetch --prune >/dev/null 2>&1 || true
+
+current=$(git symbolic-ref --short HEAD 2>/dev/null || echo detached)
+if [ "$current" != "$BASE" ]; then
+    echo "Switch to $BASE before cleanup (current=$current)" >&2
+    exit 1
+fi
+
+clean=$(git status --porcelain)
+if [ -n "$clean" ]; then
+    echo "Working tree not clean; aborting." >&2
+    exit 1
+fi
+
+deleted=0; skipped=0
+while read -r line; do
+    b=${line%% *}
+    [ "$b" = "$BASE" ] && continue
+    if [[ $b =~ $PROTECT_RE ]]; then
+        skipped=$((skipped+1)); continue
+    fi
+    info=$(git branch -vv | grep "^..$b ") || true
+    gone=false
+    if echo "$info" | grep -q "\[gone\]"; then gone=true; fi
+    if git merge-base --is-ancestor "$b" "$BASE"; then merged=true; else merged=false; fi
+    if $gone || $merged; then
+        if ! $merged && $gone; then
+            head=$(git rev-parse "$b")
+            git tag -f "archive/$b" "$head"
+            echo "Tagged archive/$b -> $head"
+        fi
+        git branch -D "$b" && deleted=$((deleted+1))
+    else
+        skipped=$((skipped+1))
+    fi
+done < <(git branch --format='%(refname:short)')
+echo "Deleted $deleted branches; skipped $skipped (base=$BASE)" >&2
+```
+
+### Copilot Action Workflow
+When you ask for cleanup:
+1. Ensure on `main` & fetch with prune.
+2. List branches & classify (merged / gone / protected / active).
+3. Tag + delete per above rules.
+4. Report summary (deleted, tagged, skipped) and how to recover (checkout from `archive/<branch>` tag).
+
+### Recovery Example
+```bash
+git checkout -b feature-x archive/feature-x
+```
+
+### Request Examples
+- "不要なローカルブランチを整理して" → Safe cleanup.
+- "強制削除で全部掃除" → Force delete (still skips `main`).
+- "wip ブランチ含め一旦タグ付け後削除" → Tag then delete all (except `main`).
+
+This policy ensures deterministic, auditable branch hygiene while preserving the ability to recover work.
