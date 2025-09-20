@@ -2,8 +2,10 @@ name: ci
 on:
   pull_request:
     branches: [ main ]
+    paths: ['functions/**']
   push:
     branches: [ main ]
+    paths: ['functions/**']
 jobs:
   python:
     name: Python (Azure Function)
