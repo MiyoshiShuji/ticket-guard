@@ -8,9 +8,6 @@
     "location": {
       "value": "japaneast"
     },
-    "baseName": {
-      "value": "ticket-guard"
-    },
     "environment": {
       "value": "poc"
     },
@@ -22,9 +19,6 @@
     },
     "purpose": {
       "value": "poc"
-    },
-    "signingSecret": {
-      "value": "REPLACE-IN-PHASE1" 
     }
   }
 }
