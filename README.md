@@ -7,7 +7,7 @@
 
 HTTP POST `https://<your-function-app>.azurewebsites.net/api/issue-token?code=<function_key>`
 
-Request JSON body:
+リクエスト JSON ボディ:
 
 ```
 {
@@ -17,7 +17,7 @@ Request JSON body:
 }
 ```
 
-Response JSON:
+レスポンス JSON:
 ```
 {
 	"ticketId": "...",
@@ -29,7 +29,7 @@ Response JSON:
 }
 ```
 
-### Signature Details
+### 署名の詳細
 ```
 message = f"{ticketId}|{deviceId}|{startAtEpochSec}|{ttlSec}|{nonce}".encode()
 sig = base64url( HMAC_SHA256( SIGNING_SECRET, message ) )
@@ -37,29 +37,29 @@ sig = base64url( HMAC_SHA256( SIGNING_SECRET, message ) )
 禁止文字: `ticketId` / `deviceId` に区切り文字 `|` は使用禁止 (署名メッセージ分解曖昧化防止)
 ```
 
-### Environment Variable
-Set `SIGNING_SECRET` (strong random secret) in Function App configuration. It's never written to logs.
+### 環境変数
+Function App の設定で `SIGNING_SECRET`（強力なランダムシークレット）を設定してください。この値はログには出力されません。
 
-### Local Development
+### ローカル開発
 ```
 cd functions
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-func start  # if Azure Functions Core Tools installed
+func start  # Azure Functions Core Tools がインストールされている場合
 ```
 
-Test:
+テスト実行:
 ```
 pytest -q
 ```
 
-### Notes
-- TTL less than 5 -> 5; greater than 30 -> 30; absent -> 8.
-- Nonce is 12 random bytes base64url (no padding).
-- Structured log events: `validation_failed`, `missing_signing_secret`, `token_issued`.
+### 注意事項
+- TTL が 5 未満の場合は 5 に、30 より大きい場合は 30 に、未指定の場合は 8 になります。
+- Nonce は 12 バイトのランダムデータを base64url エンコード（パディングなし）したものです。
+- 構造化ログイベント: `validation_failed`、`missing_signing_secret`、`token_issued`
 
-### Verification Example (Python)
+### 検証例 (Python)
 ```python
 import hmac, hashlib, base64
 
@@ -73,39 +73,39 @@ def verify(secret: str, ticket_id: str, device_id: str, start_at: int, ttl: int,
 	return hmac.compare_digest(expected, sig)
 ```
 
-## Azure Deployment
+## Azure デプロイメント
 
-### Prerequisites
+### 前提条件
 
-1. **Azure Resources**:
-   - Azure subscription
-   - Resource group for the deployment
+1. **Azure リソース**:
+   - Azure サブスクリプション
+   - デプロイ用のリソースグループ
    
-2. **GitHub OIDC Setup**:
-   - Service Principal with federated credential for GitHub Actions
-   - Contributor access to the target resource group
+2. **GitHub OIDC セットアップ**:
+   - GitHub Actions 用の連携資格情報を持つサービスプリンシパル
+   - 対象リソースグループへの共同作成者アクセス
 
-3. **Repository Secrets** (configured in GitHub repo settings):
-   - `AZURE_CLIENT_ID` - Service Principal client ID
-   - `AZURE_TENANT_ID` - Azure tenant ID
-   - `AZURE_SUBSCRIPTION_ID` - Azure subscription ID
-   - `AZURE_RESOURCE_GROUP` - Target resource group name
-   - `APP_BASENAME` - Base name for resources (e.g., "ticket-guard")
-   - `SIGNING_SECRET` - Strong random secret for HMAC signing
+3. **リポジトリシークレット** (GitHub リポジトリ設定で構成):
+   - `AZURE_CLIENT_ID` - サービスプリンシパル クライアント ID
+   - `AZURE_TENANT_ID` - Azure テナント ID
+   - `AZURE_SUBSCRIPTION_ID` - Azure サブスクリプション ID
+   - `AZURE_RESOURCE_GROUP` - 対象リソースグループ名
+   - `APP_BASENAME` - リソースのベース名 (例: "ticket-guard")
+   - `SIGNING_SECRET` - HMAC 署名用の強力なランダムシークレット
 
-### Setup Guide
+### セットアップガイド
 
-1. **Create Azure Service Principal with OIDC**:
+1. **OIDC を使用した Azure サービスプリンシパルの作成**:
 ```bash
-# Create service principal
+# サービスプリンシパルを作成
 az ad sp create-for-rbac --name "github-actions-ticket-guard" \
   --role contributor \
   --scopes /subscriptions/{subscription-id}/resourceGroups/{resource-group-name}
 
-# Note the output: appId (client ID), tenant
+# 出力をメモ: appId (クライアント ID)、tenant
 ```
 
-2. **Create Federated Credential**:
+2. **連携資格情報の作成**:
 ```bash
 az ad app federated-credential create \
   --id {client-id} \
@@ -118,28 +118,28 @@ az ad app federated-credential create \
   }'
 ```
 
-3. **Configure Repository Secrets** in GitHub Settings > Secrets and variables > Actions
+3. **リポジトリシークレットの設定** GitHub Settings > Secrets and variables > Actions で設定
 
-4. **Deploy**:
-   - Push to `main` branch to trigger automatic deployment
-   - Or manually trigger via Actions tab > Deploy to Azure > Run workflow
+4. **デプロイ**:
+   - `main` ブランチにプッシュして自動デプロイをトリガー
+   - または Actions タブ > Deploy to Azure > Run workflow で手動トリガー
 
-### Infrastructure
+### インフラストラクチャ
 
-The deployment creates:
-- **Storage Account** - Azure Functions runtime storage
-- **Application Insights** - Monitoring and logging
-- **App Service Plan** - Consumption (serverless) plan
-- **Function App** - Python 3.11 runtime with security settings
+デプロイメントによって以下が作成されます:
+- **ストレージアカウント** - Azure Functions ランタイムストレージ
+- **Application Insights** - 監視とログ記録
+- **App Service プラン** - 従量課金 (サーバーレス) プラン
+- **Function App** - Python 3.11 ランタイムとセキュリティ設定
 
-See `infra/README.md` for detailed infrastructure documentation.
+詳細なインフラストラクチャドキュメントについては `infra/README.md` を参照してください。
 
-### Function Endpoint
+### Function エンドポイント
 
-After deployment, the function will be available at:
+デプロイ後、Function は以下で利用可能になります:
 ```
 POST https://{app-name}.azurewebsites.net/api/issue-token?code={function-key}
 ```
 
-The function key is captured during deployment and displayed in the workflow logs.
+Function キーはデプロイ中に取得され、ワークフローログに表示されます。
 
