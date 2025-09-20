@@ -1,0 +1,106 @@
+name: functions-deploy
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'functions/**'
+      - '.github/workflows/functions-deploy.yml'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force deploy even if no code changes detected (placeholder logic)'
+        required: false
+        default: 'false'
+
+env:
+  PYTHON_VERSION: '3.11'
+  FUNCTIONS_DIR: functions
+  PACKAGE_NAME: function_app.zip
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: poc
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: '${{ env.FUNCTIONS_DIR }}/requirements.txt'
+
+      - name: Install dependencies (test runtime parity)
+        working-directory: ${{ env.FUNCTIONS_DIR }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run quick tests (smoke)
+        working-directory: ${{ env.FUNCTIONS_DIR }}
+        run: pytest -q
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Compute function app name
+        id: meta
+        run: |
+          if [ -z "${{ secrets.APP_BASENAME }}" ]; then
+            echo "APP_BASENAME secret not set" >&2; exit 1;
+          fi
+          echo "func_name=${{ secrets.APP_BASENAME }}-func" >> $GITHUB_OUTPUT
+
+      - name: Check Function App exists
+        run: |
+          set -e
+          if ! az functionapp show -n "${{ steps.meta.outputs.func_name }}" -g "${{ secrets.AZURE_RESOURCE_GROUP }}" >/dev/null 2>&1; then
+            echo "Function App '${{ steps.meta.outputs.func_name }}' not found in RG '${{ secrets.AZURE_RESOURCE_GROUP }}'." >&2
+            echo "Run infra workflow to provision base resources first (infra-deploy.yml)." >&2
+            exit 1
+          fi
+
+      - name: Archive package
+        run: |
+          pushd "$FUNCTIONS_DIR"
+          zip -r "../$PACKAGE_NAME" . -x "__pycache__/*" "tests/*"
+          popd
+
+      - name: Deploy package (zip)
+        run: |
+          az functionapp deployment source config-zip \
+            -g "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            -n "${{ steps.meta.outputs.func_name }}" \
+            --src "$PACKAGE_NAME"
+
+      - name: Update SIGNING_SECRET app setting (optional)
+        if: secrets.SIGNING_SECRET != ''
+        run: |
+          az functionapp config appsettings set \
+            -g "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            -n "${{ steps.meta.outputs.func_name }}" \
+            --settings SIGNING_SECRET='${{ secrets.SIGNING_SECRET }}'
+
+      - name: Summary
+        run: |
+          echo "### Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "Function App: ${{ steps.meta.outputs.func_name }}" >> $GITHUB_STEP_SUMMARY
+          HOST=$(az functionapp show -n "${{ steps.meta.outputs.func_name }}" -g "${{ secrets.AZURE_RESOURCE_GROUP }}" --query defaultHostName -o tsv || true)
+          if [ -n "$HOST" ]; then
+            echo "Base URL: https://$HOST" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Next Steps Hint
+        run: |
+          echo "### Next" >> $GITHUB_STEP_SUMMARY
+          echo "Add principalId output to infra and start Key Vault migration." >> $GITHUB_STEP_SUMMARY

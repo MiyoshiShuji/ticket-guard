@@ -1,0 +1,223 @@
+name: Infra Plan (What-if)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  RG_ONLY_TEMPLATE: infra/rg-only.bicep
+  LOCATION: japaneast
+
+jobs:
+  noop-on-main:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder for main merge
+        run: |
+          echo "No-op on main. Real infra operations are gated and not executed on merge."
+
+  plan:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set defaults (non-interactive)
+        run: |
+          # Use PoC parameters for PR runs; do not prompt or accept interactive inputs
+          echo "PARAMS=infra/parameters.poc.json" >> $GITHUB_ENV
+          echo "SUB=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
+
+      - name: Validate required secrets present
+        run: |
+          set -e
+          if [ -z "${{ secrets.AZURE_CLIENT_ID }}" ]; then echo '::error title=Missing secret::AZURE_CLIENT_ID not configured'; exit 1; fi
+          if [ -z "${{ secrets.AZURE_TENANT_ID }}" ]; then echo '::error title=Missing secret::AZURE_TENANT_ID not configured'; exit 1; fi
+          if [ -z "${{ secrets.AZURE_SUBSCRIPTION_ID }}" ]; then echo '::error title=Missing secret::AZURE_SUBSCRIPTION_ID not configured'; exit 1; fi
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.SUB }}
+
+      - name: Ensure Bicep installed
+        run: |
+          set -eux
+          az bicep version || az bicep install --yes
+
+      - name: Validate template
+        run: |
+          set -eux
+          echo "Using parameters: $PARAMS"
+          az deployment sub validate \
+            --name validate-${{ github.run_id }} \
+            --location $LOCATION \
+            --template-file $RG_ONLY_TEMPLATE \
+            --parameters @$PARAMS
+
+      - name: What-if (human summary)
+        run: |
+          set -eux
+          OUT=infra/whatif-${{ github.run_id }}.txt
+          az deployment sub what-if \
+            --name plan-${{ github.run_id }} \
+            --location $LOCATION \
+            --template-file $RG_ONLY_TEMPLATE \
+            --parameters @$PARAMS > $OUT || true
+          echo "Saved what-if to $OUT"
+
+      - name: Upload what-if artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra-whatif-${{ github.run_id }}
+          path: infra/whatif-${{ github.run_id }}.txt
+
+      - name: Comment on PR (if PR)
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = `infra/whatif-${process.env.GITHUB_RUN_ID}.txt`;
+            let body = `Infra what-if run (minimal)\nParameters: ${process.env.PARAMS || 'unknown'}\n\n`;
+            try { body += fs.readFileSync(path, 'utf8').slice(0, 8000); } catch (e) { body += 'No summary available'; }
+            await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+name: Infra Plan (What-if) - Minimal
+
+on:
+  workflow_dispatch:
+    inputs:
+      parameters_file:
+        description: 'Path to parameters file to use (infra/parameters.poc.json or infra/parameters.staging.json)'
+        required: true
+        default: 'infra/parameters.poc.json'
+      subscription_id:
+        description: 'Optional: target subscription id for this run (if omitted uses repo secret)'
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set inputs
+        run: |
+          echo "PARAMS=${{ github.event.inputs.parameters_file }}" >> $GITHUB_ENV
+          if [ -n "${{ github.event.inputs.subscription_id }}" ]; then
+            echo "SUB=${{ github.event.inputs.subscription_id }}" >> $GITHUB_ENV
+          else
+            echo "SUB=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
+          fi
+name: Infra Plan (What-if)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  RG_ONLY_TEMPLATE: infra/rg-only.bicep
+  LOCATION: japaneast
+
+jobs:
+  noop-on-main:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder for main merge
+        run: |
+          echo "No-op on main. Real infra operations are gated and not executed on merge."
+
+  plan:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set inputs
+        run: |
+          # Use the PoC parameters by default in PR runs
+          echo "PARAMS=infra/parameters.poc.json" >> $GITHUB_ENV
+          # Allow overriding SUB via repo secret for automation; do not prompt interactively
+          echo "SUB=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
+
+      - name: Validate required secrets present
+        run: |
+          set -e
+          if [ -z "${{ secrets.AZURE_CLIENT_ID }}" ]; then echo '::error title=Missing secret::AZURE_CLIENT_ID not configured'; exit 1; fi
+          if [ -z "${{ secrets.AZURE_TENANT_ID }}" ]; then echo '::error title=Missing secret::AZURE_TENANT_ID not configured'; exit 1; fi
+          if [ -z "${{ secrets.AZURE_SUBSCRIPTION_ID }}" ]; then echo '::error title=Missing secret::AZURE_SUBSCRIPTION_ID not configured'; exit 1; fi
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.SUB }}
+
+      - name: Ensure Bicep installed
+        run: |
+          set -eux
+          az bicep version || az bicep install --yes
+
+      - name: Validate template
+        run: |
+          set -eux
+          echo "Using parameters: $PARAMS"
+          az deployment sub validate \
+            --name validate-${{ github.run_id }} \
+            --location $LOCATION \
+            --template-file $RG_ONLY_TEMPLATE \
+            --parameters @$PARAMS
+
+      - name: What-if (human summary)
+        run: |
+          set -eux
+          OUT=infra/whatif-${{ github.run_id }}.txt
+          az deployment sub what-if \
+            --name plan-${{ github.run_id }} \
+            --location $LOCATION \
+            --template-file $RG_ONLY_TEMPLATE \
+            --parameters @$PARAMS > $OUT || true
+          echo "Saved what-if to $OUT"
+
+      - name: Upload what-if artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra-whatif-${{ github.run_id }}
+          path: infra/whatif-${{ github.run_id }}.txt
+
+      - name: Comment on PR (if PR)
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = `infra/whatif-${process.env.GITHUB_RUN_ID}.txt`;
+            let body = `Infra what-if run (minimal)\nParameters: ${process.env.PARAMS || 'unknown'}\n\n`;
+            try { body += fs.readFileSync(path, 'utf8').slice(0, 8000); } catch (e) { body += 'No summary available'; }
+            await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });

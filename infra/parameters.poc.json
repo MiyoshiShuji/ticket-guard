@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "resourceGroupName": {
+      "value": "poc-ticket-guard-rg"
+    },
+    "location": {
+      "value": "japaneast"
+    },
+    "environment": {
+      "value": "poc"
+    },
+    "owner": {
+      "value": "shuji.miyoshi@willer.co.jp"
+    },
+    "expiresOn": {
+      "value": "2025-12-31" 
+    },
+    "purpose": {
+      "value": "poc"
+    }
+  }
+}
