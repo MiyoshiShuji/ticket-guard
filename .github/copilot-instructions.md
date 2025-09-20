@@ -16,8 +16,7 @@ python -m venv .venv                    # Takes 3 seconds. NEVER CANCEL.
 source .venv/bin/activate              # Instant
 pip install -r requirements.txt       # Takes 5-15 seconds depending on network. NEVER CANCEL.
 pytest -q                             # Takes <1 second. Runs 18 tests.
-mypy .                                 # Takes 4 seconds. Type checking.
-```
+mypy .
 
 **CRITICAL**: Set timeout to 60+ seconds for pip install command due to potential network delays.
 **NEVER CANCEL any of these commands.** If pip install times out, network connectivity may be limited - document this in your changes.
