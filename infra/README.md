@@ -2,12 +2,8 @@
 
 `infra/` ディレクトリは 現段階 (Phase 0) では「Resource Group のみ」をデプロイ対象としています。Function / Storage / Application Insights など本体リソースは後続フェーズ (Phase 1 以降) で `deploy.subscription.bicep` + `main.bicep` を有効化して展開します。
 
-## ファイル一覧
-
-- `main.bicep` : (Phase1以降で使用) Storage / Application Insights / Consumption Plan / Function App をまとめるテンプレート
-- `deploy.subscription.bicep` : (Phase1以降) RG 作成 + main モジュール (現段階は未使用)
-- `rg-only.bicep` : Phase0 で使用中 (Resource Group 単体)
-- `parameters.poc.json` : PoC 用パラメータ (baseName / owner / expiresOn / signingSecret placeholder 等)
+- `poc.bicepparam` : Phase0 で使用する Bicep ネイティブパラメータ (RG のみ)
+- `parameters.poc.json` : (Deprecated for Phase0) 旧 ARM 形式。履歴 & Phase1 以降の比較用に残置
 - `parameters.example.json` : 参考例 (将来複数環境化の雛形)
 
 ## 現段階 (Phase0) で作成されるリソース
@@ -66,17 +62,19 @@ PoC ではサブスクリプション固有値をパラメータ化せず、環�
 PoC フローは基本 GitHub Actions 経由ですが、ローカルで挙動を確認したい場合:
 ```bash
 az login
+# What-if (Phase0 RG only, bicepparam)
 az deployment sub what-if \
   --name local-plan-001 \
   --location japaneast \
-  --template-file infra/deploy.subscription.bicep \
-  --parameters @infra/parameters.poc.json signingSecret="$(openssl rand -hex 16)"
+  --template-file infra/rg-only.bicep \
+  --parameters @infra/poc.bicepparam
 
+# Apply (Phase0 RG only)
 az deployment sub create \
   --name local-apply-001 \
   --location japaneast \
-  --template-file infra/deploy.subscription.bicep \
-  --parameters @infra/parameters.poc.json signingSecret="$(openssl rand -hex 16)"
+  --template-file infra/rg-only.bicep \
+  --parameters @infra/poc.bicepparam
 ```
 
 ## Outputs

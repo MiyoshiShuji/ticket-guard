@@ -24,7 +24,7 @@ concurrency:
 env:
   LOCATION: japaneast
   RG_ONLY_TEMPLATE: infra/rg-only.bicep
-  PARAMETERS_FILE: infra/parameters.poc.json
+  PARAMETERS_FILE: infra/poc.bicepparam
 
 jobs:
   deploy:
@@ -41,7 +41,7 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Create / Update RG only (subscription deployment)
+      - name: Create / Update RG only (subscription deployment via bicepparam)
         id: deploy
         run: |
           set -eux
@@ -49,8 +49,7 @@ jobs:
             --name apply-${{ github.run_id }} \
             --location $LOCATION \
             --template-file $RG_ONLY_TEMPLATE \
-            --parameters @$PARAMETERS_FILE \
-            --parameters resourceGroupName=$(jq -r '.parameters.resourceGroupName.value' $PARAMETERS_FILE) location=$(jq -r '.parameters.location.value' $PARAMETERS_FILE) | tee deploy-output.json
+            --parameters @$PARAMETERS_FILE | tee deploy-output.json
 
       - name: Summarize
         run: |

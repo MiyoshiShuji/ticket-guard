@@ -4,19 +4,23 @@ on:
   pull_request:
     paths:
       - 'infra/**.bicep'
-      - 'infra/**.json'
+  - 'infra/**.json'
+  - 'infra/**.bicepparam'
       - '.github/workflows/infra-plan.yml'
-  push:
-    branches: [ main ]
-    paths:
-      - 'infra/**.bicep'
-      - 'infra/**.json'
-      - '.github/workflows/infra-plan.yml'
-
-permissions:
-  id-token: write
-  contents: read
-
+  on:
+    pull_request:
+      paths:
+        - 'infra/**.bicep'
+        - 'infra/**.bicepparam'
+        - 'infra/**.json'
+        - '.github/workflows/infra-plan.yml'
+    push:
+      branches: [ main ]
+      paths:
+        - 'infra/**.bicep'
+        - 'infra/**.bicepparam'
+        - 'infra/**.json'
+        - '.github/workflows/infra-plan.yml'
 concurrency:
   group: infra-plan-${{ github.ref }}
   cancel-in-progress: false
@@ -24,7 +28,7 @@ concurrency:
 env:
   LOCATION: japaneast
   RG_ONLY_TEMPLATE: infra/rg-only.bicep
-  PARAMETERS_FILE: infra/parameters.poc.json
+  PARAMETERS_FILE: infra/poc.bicepparam
 
 jobs:
   what-if:
@@ -44,15 +48,15 @@ jobs:
       - name: Azure CLI Version
         run: az version
 
-      - name: What-if (RG only)
+      - name: What-if (RG only via bicepparam)
         run: |
           set -eux
+          # bicepparam file already binds to rg-only template and inlines parameter values.
           az deployment sub what-if \
             --name plan-${{ github.run_id }} \
             --location $LOCATION \
             --template-file $RG_ONLY_TEMPLATE \
-            --parameters @$PARAMETERS_FILE \
-            --parameters resourceGroupName=$(jq -r '.parameters.resourceGroupName.value' $PARAMETERS_FILE) location=$(jq -r '.parameters.location.value' $PARAMETERS_FILE)
+            --parameters @$PARAMETERS_FILE
 
       - name: Summary
         if: always()
@@ -60,5 +64,5 @@ jobs:
           echo "### Infra What-if Result" >> $GITHUB_STEP_SUMMARY
           echo "Template: $RG_ONLY_TEMPLATE" >> $GITHUB_STEP_SUMMARY
           echo "Mode: Resource Group creation only (Function/App resources deferred)" >> $GITHUB_STEP_SUMMARY
-          echo "Parameters file: $PARAMETERS_FILE" >> $GITHUB_STEP_SUMMARY
+          echo "Parameters file: $PARAMETERS_FILE (Bicep params)" >> $GITHUB_STEP_SUMMARY
 
