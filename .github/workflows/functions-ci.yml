@@ -1,0 +1,37 @@
+name: functions-ci
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'functions/**'
+      - '.github/workflows/functions-ci.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'functions/**'
+      - '.github/workflows/functions-ci.yml'
+
+env:
+  PYTHON_VERSION: '3.11'
+  FUNCTIONS_DIR: functions
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: '${{ env.FUNCTIONS_DIR }}/requirements.txt'
+      - name: Install dependencies
+        working-directory: ${{ env.FUNCTIONS_DIR }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run tests
+        working-directory: ${{ env.FUNCTIONS_DIR }}
+        run: pytest -v --maxfail=1
