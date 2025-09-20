@@ -2,6 +2,8 @@
 
 Always reference these instructions first and fallback to search or bash commands only when you encounter unexpected information that does not match the info here.
 
+言語ポリシー: ユーザーからのサマリ出力は、明示的に別言語を求められない限り日本語で出力してください。
+
 ## Overview
 Ticket Guard is a Python-based Azure Functions application that provides secure token issuance with HMAC-SHA256 signatures. The service validates ticket and device IDs, generates time-limited tokens with nonces, and signs them cryptographically for verification.
 
@@ -393,3 +395,94 @@ git checkout -b feature-x archive/feature-x
 - "wip ブランチ含め一旦タグ付け後削除" → Tag then delete all (except `main`).
 
 This policy ensures deterministic, auditable branch hygiene while preserving the ability to recover work.
+
+## Infrastructure as Code (Bicep) Authoring Guidance (READ FIRST)
+When generating or modifying any *.bicep* file, follow these repository conventions BEFORE resorting to arbitrary examples:
+
+### 1. Naming Convention (Environment First)
+Use environment prefix to highlight disposability. Pattern:
+```
+<env>-<baseName>-<resourceSpecific>
+```
+Current PoC baseName: `ticket-guard`, environment fixed: `poc`
+Examples:
+```
+poc-ticket-guard-func
+poc-ticket-guard-plan
+poc-ticket-guard-ai
+```
+Storage account: `pocticketguard<6hex>` (lowercase, <=24, hyphens removed)
+
+### 2. Tag Set (apply to ALL resources)
+```
+environment = poc
+purpose     = poc
+owner       = shuji.miyoshi@willer.co.jp
+expiresOn   = <YYYY-MM-DD>
+app         = ticket-guard
+```
+Always surface a `commonTags` var and assign to each resource's `tags` property.
+
+### 3. Parameters & Decorators
+- Keep only parameters that vary across deployments (future dev/stg/prod). PoC keeps `baseName`, `signingSecret`, `owner`, `expiresOn`.
+- Use decorators where practical:
+    - `@minLength` / `@maxLength` for naming control (e.g. baseName 3–40)
+    - `@secure()` for secrets (already on `signingSecret`)
+    - `@allowed` only for very stable enumerations (runtime versions)
+
+### 4. Secrets Handling Roadmap
+Current PoC injects `SIGNING_SECRET` directly. Do NOT introduce new secrets via plain parameters—next evolution is Key Vault + Managed Identity. When proposing changes, add a TODO comment instead of adding more secure params.
+
+### 5. Avoid Over‑Engineering For PoC
+Do NOT add: VNet, Private Endpoints, Premium Plans, Key Vault deployment, APIM, unless explicitly requested. Keep Consumption (Y1) unless scale or networking need is stated.
+
+### 6. Azure Verified Modules (AVM)
+Before hand‑crafting complex resources (e.g., virtual network, key vault, storage with diagnostics), evaluate AVM public registry modules:
+```
+br/public:avm/res/<provider>/<type>:<version>
+```
+Example (virtual network – only if later required):
+```
+module vnet 'br/public:avm/res/network/virtual-network:<version>' = {
+    name: 'vnet-${uniqueString(resourceGroup().id)}'
+    params: {
+        name: 'poc-ticket-guard-vnet'
+        location: resourceGroup().location
+        addressPrefixes: ['10.20.0.0/16']
+        subnets: [ { name: 'funcs'; addressPrefix: '10.20.1.0/24' } ]
+        tags: commonTags
+    }
+}
+```
+Only introduce this after an explicit user request to add networking or Key Vault private access.
+
+### 7. Linter / Config
+If adding a `bicepconfig.json`, keep linter enabled. Do not suppress warnings (`listKeys`, `reorder`) unless required. Prefer converting repeated string concatenations to interpolations.
+
+### 8. Patterns to Reuse
+- `uniqueSuffix = substring(uniqueString(resourceGroup().id), 0, 6)` for deterministic short uniqueness.
+- Connection strings: keep comment noting public cloud `EndpointSuffix=core.windows.net` and how to adapt for sovereign clouds.
+- Centralize tags & naming early to minimize drift.
+
+### 9. Future Extensions (Document Instead of Implementing Now)
+Add comments / doc updates (NOT code) for:
+- Key Vault integration
+- sigVersion (HMAC v1 → Ed25519 v2)
+- VNet + Private Endpoint (premium or isolation requirement)
+
+### 10. PR Review Checklist (Infrastructure Changes)
+1. Naming follows `<env>-<baseName>` prefix
+2. All resources have `tags: commonTags`
+3. No new plain secret params beyond existing `signingSecret`
+4. Parameter descriptions are present & meaningful
+5. Default SKUs are lowest cost appropriate for PoC
+6. Comments added for any intentional deviation from best practices
+
+### 11. References (Consult Before Free‑Form Generation)
+- Best practices: https://learn.microsoft.com/azure/azure-resource-manager/bicep/best-practices
+- Parameters & decorators: https://learn.microsoft.com/azure/azure-resource-manager/bicep/parameters
+- Linter rules: https://learn.microsoft.com/azure/azure-resource-manager/bicep/linter
+- Name generation: https://learn.microsoft.com/azure/azure-resource-manager/bicep/patterns-name-generation
+- AVM modules intro: https://learn.microsoft.com/azure/azure-resource-manager/bicep/modules/resource-modules
+
+If any generated proposal conflicts with these rules, prefer these repository conventions and explain the deviation in the PR description.

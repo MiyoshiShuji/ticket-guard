@@ -2,6 +2,7 @@ name: Infra Plan (What-if)
 
 on:
   pull_request:
+    branches: [ main ]
     paths:
       - 'infra/**.bicep'
       - 'infra/**.bicepparam'
@@ -25,6 +26,7 @@ env:
   LOCATION: japaneast
   RG_ONLY_TEMPLATE: infra/rg-only.bicep
   PARAMETERS_FILE: infra/poc.bicepparam
+  ASSIGNEE: copilot
 
 jobs:
   what-if:
@@ -57,14 +59,19 @@ jobs:
         run: az version
 
       - name: What-if (RG only via bicepparam)
+        id: whatif-run
         run: |
           set -eux
           # bicepparam file already binds to rg-only template and inlines parameter values.
+          WHATIF_OUT=infra/whatif-${{ github.run_id }}.json
           az deployment sub what-if \
             --name plan-${{ github.run_id }} \
             --location $LOCATION \
             --template-file $RG_ONLY_TEMPLATE \
-            --parameters @$PARAMETERS_FILE
+            --parameters @$PARAMETERS_FILE \
+            --output json > $WHATIF_OUT
+          # Save a compact human-readable summary for the workflow UI
+          jq -r '.changes[]? | "[\(.changeType)] \(.resourceId) -> \(.details | @text)"' $WHATIF_OUT 2>/dev/null | sed 's/^/ - /' > infra/whatif-summary-${{ github.run_id }}.md || true
 
       - name: Summary
         if: always()
@@ -74,4 +81,36 @@ jobs:
           echo "Mode: Resource Group creation only (Function/App resources deferred)" >> $GITHUB_STEP_SUMMARY
           echo "Parameters file: $PARAMETERS_FILE (Bicep params)" >> $GITHUB_STEP_SUMMARY
           echo "To test prod: set PARAMETERS_FILE=infra/prod.bicepparam via workflow_dispatch (future enhancement)" >> $GITHUB_STEP_SUMMARY
+
+
+      - name: Upload what-if artifacts
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra-whatif-${{ github.run_id }}
+          path: |
+            infra/whatif-${{ github.run_id }}.json
+            infra/whatif-summary-${{ github.run_id }}.md
+
+      - name: Post what-if summary to PR (github-script)
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = `infra/whatif-summary-${process.env.GITHUB_RUN_ID}.md`;
+            let summary = '';
+            try {
+              summary = fs.readFileSync(path, 'utf8');
+            } catch (e) {
+              summary = 'No human-readable summary generated; download the what-if JSON from the workflow artifacts.';
+            }
+            const body = `### Infra what-if (automatic)\nTemplate: ${process.env.RG_ONLY_TEMPLATE}\nParameters: ${process.env.PARAMETERS_FILE}\n\nSummary:\n\n${summary}\n\nFull machine-readable output is available as a workflow artifact named infra-whatif-${process.env.GITHUB_RUN_ID}`;
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body
+            });
+
 

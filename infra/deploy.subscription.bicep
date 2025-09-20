@@ -33,6 +33,10 @@ param purpose string = 'poc'
 @secure()
 param signingSecret string
 
+@description('Optional: expected subscription id. When provided, the deployment will expose `subscriptionMatches` output indicating whether the current deployment subscription matches the expected id.')
+@maxLength(64)
+param expectedSubscriptionId string = ''
+
 // Common tags applied both at RG creation (so portal filters show them even if module fails) and to resources inside main.bicep
 var commonTags = {
   environment: environment
@@ -41,6 +45,9 @@ var commonTags = {
   expiresOn: expiresOn
   app: baseName
 }
+
+// If caller provided an expected subscription id, compute whether current subscription matches.
+var subscriptionMatches = empty(expectedSubscriptionId) || toLower(expectedSubscriptionId) == toLower(subscription().subscriptionId)
 
 // Create / update the resource group
 resource rg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
@@ -72,3 +79,6 @@ output appInsightsConnectionString string = app.outputs.appInsightsConnectionStr
 output storageAccountName string = app.outputs.storageAccountName
 output functionPrincipalId string = app.outputs.functionPrincipalId
 output tenantId string = app.outputs.tenantId
+
+// Expose whether the current subscription matches the provided expectedSubscriptionId (if any).
+output subscriptionMatches bool = subscriptionMatches

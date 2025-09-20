@@ -28,6 +28,10 @@ param purpose string = 'poc'
 @description('Base application name used for tagging.')
 param app string = 'ticket-guard'
 
+@description('Optional: expected subscription id. When provided, the template will expose a boolean output `subscriptionMatches` indicating whether the current deployment subscription matches the expected value. This helps avoid accidental deploys to the wrong subscription.')
+@maxLength(64)
+param expectedSubscriptionId string = ''
+
 // Common tags (adjust here once; all resources later should follow the same set)
 var tags = {
   environment: environment
@@ -37,12 +41,18 @@ var tags = {
   app: app
 }
 
+// If caller provided an expected subscription id, compute whether current subscription matches.
+var subscriptionMatches = empty(expectedSubscriptionId) || toLower(expectedSubscriptionId) == toLower(subscription().subscriptionId)
+
 // Create or update the resource group
 resource rg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
   name: resourceGroupName
   location: location
   tags: tags
 }
+
+// Expose whether the current subscription matches the expected id, if provided.
+output subscriptionMatches bool = subscriptionMatches
 
 output resourceGroupName string = rg.name
 output location string = rg.location
