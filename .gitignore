@@ -11,6 +11,15 @@ ios-demo/**/*.xcuserstate
 ### Derived Data (if path added later)
 DerivedData/
 
+### Python
+functions/.venv/
+functions/__pycache__/
+functions/**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
 ### Misc
 *.swp
 *.tmp
