@@ -70,3 +70,5 @@ output functionAppHostname string = app.outputs.functionAppHostname
 output functionAppUrl string = app.outputs.functionAppUrl
 output appInsightsConnectionString string = app.outputs.appInsightsConnectionString
 output storageAccountName string = app.outputs.storageAccountName
+output functionPrincipalId string = app.outputs.functionPrincipalId
+output tenantId string = app.outputs.tenantId
