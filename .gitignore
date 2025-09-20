@@ -24,9 +24,13 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 
-### Azure/Bicep generated files
-infra/*.json
-!infra/parameters.example.json
+### Azure/Bicep generated / output parameter files
+# Previously ignored all infra/*.json which blocked committing intentional param files.
+# Restrict ignore to common deployment output artifacts (e.g., exported templates, what-if outputs) while allowing curated parameter files.
+infra/*-deployment.json
+infra/*-whatif.json
+infra/outputs*.json
+!infra/parameters*.json
 
 ### Misc
 *.swp
