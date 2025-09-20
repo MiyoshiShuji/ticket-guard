@@ -22,10 +22,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+.mypy_cache/
 
-### Misc
-*.swp
-*.tmp
+### Azure/Bicep generated files
+infra/*.json
+!infra/parameters.example.json
 
 ### Misc
 *.swp
