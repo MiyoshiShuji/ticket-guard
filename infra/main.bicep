@@ -1,39 +1,55 @@
-@description('Base name for all resources')
-param appBaseName string = 'ticket-guard'
+@description('Base name for resources (letters/numbers/hyphen). Example: ticket-guard')
+param baseName string = 'ticket-guard'
 
-@description('Location for all resources')
+@description('Environment suffix (dev/stg/prod)')
+@allowed([
+  'dev'
+  'stg'
+  'prod'
+])
+param environment string = 'dev'
+
+@description('Azure region for deployment')
 param location string = resourceGroup().location
 
-@description('Environment suffix (e.g., dev, staging, prod)')
-param environment string = 'prod'
+@description('Python version')
+@allowed(['3.11'])
+param pythonVersion string = '3.11'
+
+@description('Functions runtime major version')
+@allowed(['4'])
+param functionsVersion string = '4'
 
 @description('Signing secret for HMAC token generation')
 @secure()
 param signingSecret string
 
-// Variables
+// ---------- naming helpers ----------
+var namePrefix = '${baseName}-${environment}'
 var uniqueSuffix = substring(uniqueString(resourceGroup().id), 0, 6)
-var storageAccountName = '${replace(appBaseName, '-', '')}${environment}${uniqueSuffix}'
-var appInsightsName = '${appBaseName}-${environment}-insights'
-var appServicePlanName = '${appBaseName}-${environment}-plan'
-var functionAppName = '${appBaseName}-${environment}-func'
+var storageName = toLower(replace('${baseName}${environment}${uniqueSuffix}', '-', ''))  // <= 24, lowercase
+var appInsightsName = '${namePrefix}-ai'
+var planName = '${namePrefix}-plan'
+var functionAppName = '${namePrefix}-func'
 
-// Storage Account (required for Azure Functions)
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
-  name: storageAccountName
+// ---------- storage (required by Functions) ----------
+resource storage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
+  name: storageName
   location: location
-  sku: {
-    name: 'Standard_LRS'
-  }
+  sku: { name: 'Standard_LRS' }
   kind: 'StorageV2'
   properties: {
-    supportsHttpsTrafficOnly: true
     minimumTlsVersion: 'TLS1_2'
     allowBlobPublicAccess: false
+    supportsHttpsTrafficOnly: true
   }
 }
 
-// Application Insights
+// build connection string for AzureWebJobsStorage
+var storageKey = listKeys(storage.id, '2023-01-01').keys[0].value
+var storageConn = 'DefaultEndpointsProtocol=https;AccountName=${storage.name};AccountKey=${storageKey};EndpointSuffix=${environment().suffixes.storage}'
+
+// ---------- application insights ----------
 resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: appInsightsName
   location: location
@@ -41,92 +57,60 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   properties: {
     Application_Type: 'web'
     RetentionInDays: 90
-    publicNetworkAccessForIngestion: 'Enabled'
-    publicNetworkAccessForQuery: 'Enabled'
   }
 }
 
-// App Service Plan (Consumption Plan for Azure Functions)
-resource appServicePlan 'Microsoft.Web/serverfarms@2023-01-01' = {
-  name: appServicePlanName
+// ---------- consumption plan (linux) ----------
+resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
+  name: planName
   location: location
   sku: {
     name: 'Y1'
     tier: 'Dynamic'
-    size: 'Y1'
-    family: 'Y'
-    capacity: 0
   }
   properties: {
-    reserved: true  // Required for Linux (Python runtime)
+    reserved: true   // Linux
   }
 }
 
-// Function App
-resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
+// ---------- function app (linux, python) ----------
+resource func 'Microsoft.Web/sites@2023-12-01' = {
   name: functionAppName
   location: location
-  kind: 'functionapp'
+  kind: 'functionapp,linux'
   identity: {
     type: 'SystemAssigned'
   }
   properties: {
-    serverFarmId: appServicePlan.id
-    siteConfig: {
-      appSettings: [
-        {
-          name: 'AzureWebJobsStorage'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};EndpointSuffix=${az.environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
-        }
-        {
-          name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};EndpointSuffix=${az.environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
-        }
-        {
-          name: 'WEBSITE_CONTENTSHARE'
-          value: toLower(functionAppName)
-        }
-        {
-          name: 'FUNCTIONS_EXTENSION_VERSION'
-          value: '~4'
-        }
-        {
-          name: 'FUNCTIONS_WORKER_RUNTIME'
-          value: 'python'
-        }
-        {
-          name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
-          value: appInsights.properties.InstrumentationKey
-        }
-        {
-          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-          value: appInsights.properties.ConnectionString
-        }
-        {
-          name: 'SIGNING_SECRET'
-          value: signingSecret
-        }
-      ]
-      pythonVersion: '3.11'
-      use32BitWorkerProcess: false
-      ftpsState: 'FtpsOnly'
-      minTlsVersion: '1.2'
-      scmMinTlsVersion: '1.2'
-      cors: {
-        allowedOrigins: [
-          'https://portal.azure.com'
-        ]
-      }
-    }
+    serverFarmId: plan.id
     httpsOnly: true
-    publicNetworkAccess: 'Enabled'
+    siteConfig: {
+      linuxFxVersion: 'Python|${pythonVersion}'
+      ftpsState: 'Disabled'
+      minTlsVersion: '1.2'
+      http20Enabled: true
+      appSettings: [
+        // required
+        { name: 'FUNCTIONS_WORKER_RUNTIME'; value: 'python' }
+        { name: 'FUNCTIONS_EXTENSION_VERSION'; value: '~${functionsVersion}' }
+        { name: 'AzureWebJobsStorage'; value: storageConn }
+
+        // deployment model: run from package (recommended)
+        { name: 'WEBSITE_RUN_FROM_PACKAGE'; value: '1' }
+
+        // observability
+        { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'; value: appInsights.properties.ConnectionString }
+
+        // demo secret (use Key Vault later)
+        { name: 'SIGNING_SECRET'; value: signingSecret }
+      ]
+    }
   }
 }
 
-// Outputs
-output functionAppName string = functionApp.name
-output functionAppHostName string = functionApp.properties.defaultHostName
-output functionAppUrl string = 'https://${functionApp.properties.defaultHostName}'
-output resourceGroupName string = resourceGroup().name
-output storageAccountName string = storageAccount.name
-output appInsightsName string = appInsights.name
+// ---------- outputs ----------
+output functionAppName string = func.name
+output functionAppHostname string = func.properties.defaultHostName
+output functionAppUrl string = 'https://${func.properties.defaultHostName}'
+output appInsightsConnectionString string = appInsights.properties.ConnectionString
+output storageAccountName string = storage.name
