@@ -4,23 +4,16 @@ on:
   pull_request:
     paths:
       - 'infra/**.bicep'
-  - 'infra/**.json'
-  - 'infra/**.bicepparam'
+      - 'infra/**.bicepparam'
+      - 'infra/**.json'
       - '.github/workflows/infra-plan.yml'
-  on:
-    pull_request:
-      paths:
-        - 'infra/**.bicep'
-        - 'infra/**.bicepparam'
-        - 'infra/**.json'
-        - '.github/workflows/infra-plan.yml'
-    push:
-      branches: [ main ]
-      paths:
-        - 'infra/**.bicep'
-        - 'infra/**.bicepparam'
-        - 'infra/**.json'
-        - '.github/workflows/infra-plan.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'infra/**.bicep'
+      - 'infra/**.bicepparam'
+      - 'infra/**.json'
+      - '.github/workflows/infra-plan.yml'
 concurrency:
   group: infra-plan-${{ github.ref }}
   cancel-in-progress: false
