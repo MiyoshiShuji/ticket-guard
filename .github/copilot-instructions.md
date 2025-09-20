@@ -16,7 +16,7 @@ python -m venv .venv                    # Takes 3 seconds. NEVER CANCEL.
 source .venv/bin/activate              # Instant
 pip install -r requirements.txt       # Takes 5-15 seconds depending on network. NEVER CANCEL.
 pytest -q                             # Takes <1 second. Runs 18 tests.
-mypy .
+mypy .                               # Takes 4 seconds. NEVER CANCEL.
 
 **CRITICAL**: Set timeout to 60+ seconds for pip install command due to potential network delays.
 **NEVER CANCEL any of these commands.** If pip install times out, network connectivity may be limited - document this in your changes.
@@ -26,6 +26,8 @@ mypy .
 pip install --timeout 60 --retries 3 -r requirements.txt
 ```
 If that also fails, document: "pip install fails due to network limitations" and use manual testing without full dependency installation.
+
+**CRITICAL**: Network connectivity may be restricted in some environments. The limited testing workflow below works without any pip install dependencies.
 
 ### Environment Setup
 Set the required environment variable for local testing:
@@ -120,6 +122,19 @@ except Exception as e:
 "
 ```
 
+## Linting and Code Quality
+
+### Flake8 Linting (Optional)
+The CI uses flake8 for code style checking:
+```bash
+cd functions
+source .venv/bin/activate
+pip install flake8                   # Takes 2-3 seconds
+flake8 --exclude=.venv .            # Takes <1 second. ALWAYS exclude .venv directory
+```
+
+**NOTE**: flake8 reports style violations but tests and functionality work correctly. The codebase currently has style issues but is fully functional.
+
 ## Azure Functions Core Tools (Optional)
 **WARNING**: Installation requires internet access to Azure CDN:
 ```bash
@@ -173,11 +188,16 @@ Expected: 500 status, "Server misconfiguration" error.
 ### Key Files
 - `functions/IssueToken/__init__.py` - Main Azure Function implementation
 - `functions/IssueToken/function.json` - Azure Function binding configuration
+- `functions/VerifyToken/__init__.py` - Token verification function (validates issued tokens)
+- `functions/VerifyToken/function.json` - Verification function binding configuration
 - `functions/tests/test_issue_token.py` - Comprehensive test suite (18 tests)
 - `functions/requirements.txt` - Python dependencies (azure-functions, mypy, pytest)
+- `functions/pyproject.toml` - Poetry configuration (alternative to requirements.txt)
 - `functions/host.json` - Azure Functions runtime configuration
 - `functions/local.settings.json` - Local development settings
 - `functions/mypy.ini` - Type checking configuration
+- `DEPLOYMENT.md` - Azure deployment guide
+- `infra/main.bicep` - Infrastructure as code template
 
 ### Dependencies
 - `azure-functions==1.18.0` - Azure Functions runtime bindings
@@ -211,20 +231,26 @@ The following are outputs from frequently run commands. Reference them instead o
 ```
 $ ls -la
 .git/
-.github/
+.github/            # GitHub workflows and this copilot-instructions.md file
 .gitignore
-README.md
-functions/
+.vscode/           # VS Code configuration
+DEPLOYMENT.md      # Azure deployment quick reference
+README.md          # Main project documentation
+functions/         # Azure Functions implementation
+infra/            # Infrastructure as Code (Bicep templates)
+ios-demo/         # iOS demo application
 ```
 
 ### Functions Directory
 ```
 $ ls -la functions/
-IssueToken/          # Main function implementation
+IssueToken/          # Main token issuance function implementation
+VerifyToken/         # Token verification function implementation  
 tests/               # Test suite
 host.json           # Azure Functions runtime config
 local.settings.json # Local development settings
 mypy.ini           # Type checking configuration  
+pyproject.toml     # Poetry configuration
 requirements.txt   # Python dependencies
 ```
 
@@ -276,7 +302,8 @@ sig = base64url(HMAC_SHA256(SIGNING_SECRET, message))
 
 ## Limitations
 - Azure Functions Core Tools requires internet access to Azure CDN (may fail: `getaddrinfo ENOTFOUND cdn.functions.azure.com`)
+- Poetry installation fails due to network restrictions - pip workflow is reliable alternative
 - Pip install may fail or timeout due to network restrictions - use cached venv when possible
-- No CI/CD workflows currently configured
-- No additional linting tools (flake8, black) configured
+- CI/CD workflows exist (.github/workflows/) but are not for local development
+- flake8 linting reports style issues but doesn't prevent functionality
 - Function must be tested manually when Azure Functions Core Tools unavailable
