@@ -18,7 +18,14 @@ functions/**/__pycache__/
 *.pyc
 *.pyo
 *.pyd
+__pycache__/
+*.py[cod]
+*$py.class
 .pytest_cache/
+
+### Misc
+*.swp
+*.tmp
 
 ### Misc
 *.swp

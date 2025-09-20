@@ -1,0 +1,27 @@
+name: ci
+on:
+  pull_request:
+    branches: [ main ]
+    paths: ['functions/**']
+  push:
+    branches: [ main ]
+    paths: ['functions/**']
+jobs:
+  python:
+    name: Python (Azure Function)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install deps
+        run: pip install -r requirements.txt flake8
+      - name: Run tests
+        run: pytest -vv --maxfail=1
+      - name: Lint
+        run: flake8 .
